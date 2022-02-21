@@ -1,11 +1,12 @@
 from file import File
 
 class SimpleFileObject:
-    def __init__(self, name: str, length: int = None, hash: str = None, tree: list = None):
+    def __init__(self, name: str, length: int = None, hash: str = None, modified: int = None, tree: list = None):
         self.name = name
         self.length = length
         self.hash = hash
         self.tree = tree
+        self.modified = modified
 
         isFile = self.isFile
         isDir = self.isDirectory
@@ -27,7 +28,7 @@ class SimpleFileObject:
             tree = [SimpleFileObject.FromDict(f) for f in obj['tree']]
             return SimpleFileObject(obj['name'], tree=tree)
         else:
-            return SimpleFileObject(obj['name'], length=obj['length'], hash=obj['hash'])
+            return SimpleFileObject(obj['name'], length=obj['length'], hash=obj['hash'], modified=obj['modified'])
 
     @staticmethod
     def FromFile(file: File):
@@ -35,7 +36,7 @@ class SimpleFileObject:
             tree = [SimpleFileObject.FromFile(f) for f in file]
             return SimpleFileObject(file.name, tree=tree)
         else:
-            return SimpleFileObject(file.name, length=file.length, hash=file.sha1)
+            return SimpleFileObject(file.name, length=file.length, hash=file.sha1, modified=file.modified)
 
     @property
     def isDirectory(self):
@@ -109,14 +110,14 @@ class FileComparer2:
         super().__init__()
         self.basePath = basePath
 
-        def defaultCompareFunc(remoteFile: SimpleFileObject, localRelPath: str, localAbsPath: str):
-            return remoteFile.sha1 == File(localAbsPath).sha1
+        def defaultCompareFunc(remote: SimpleFileObject, local: File, path: str):
+            return remote.sha1 == local.sha1
 
         self.compareFunc = compareFunc if compareFunc is not None else defaultCompareFunc
 
         self.oldFiles = []
         self.oldFolders = []
-        self.newFiles = {}
+        self.newFiles = []
         self.newFolders = []
 
     def findNewFiles(self, current: SimpleFileObject, template: File):
@@ -141,7 +142,7 @@ class FileComparer2:
                 else:
                     if corresponding.isFile:
                         # if corresponding.sha1 != t.sha1:  # 校验hash
-                        if not self.compareFunc(corresponding, t.path, t.relPath(self.basePath)):
+                        if not self.compareFunc(corresponding, t, t.relPath(self.basePath)):
                             # 先删除旧的再获取新的
                             self.addOldFile(corresponding, template.relPath(self.basePath))
                             self.addNewFile(corresponding, t)
@@ -205,9 +206,9 @@ class FileComparer2:
                 if m.isDirectory:
                     self.addNewFile(m, mCorresponding)
                 else:
-                    self.newFiles[mCorresponding.relPath(self.basePath)] = [m.length, m.hash]
+                    self.newFiles += [mCorresponding.relPath(self.basePath)]
         else:
-            self.newFiles[template.relPath(self.basePath)] = [template.length, template.sha1]
+            self.newFiles += [template.relPath(self.basePath)]
 
     def compareWithSimpleFileObject(self, current: File, template: SimpleFileObject):
         self.findNewFiles(template, current)

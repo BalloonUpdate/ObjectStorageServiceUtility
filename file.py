@@ -201,18 +201,18 @@ class File:
         return self.sha1
 
     @property
-    def createdTime(self):
+    def created(self):
         return int(os.path.getctime(self.path))
 
     @property
-    def modifiedTime(self):
+    def modified(self):
         return int(os.path.getmtime(self.path))
 
     def getCreatedTimeByFormat(self, format="%Y-%m-%d %H:%M:%S"):
-        return time.strftime(format, time.localtime(self.createdTime))
+        return time.strftime(format, time.localtime(self.created))
 
     def getModifiedTimeByFormat(self, format="%Y-%m-%d %H:%M:%S"):
-        return time.strftime(format, time.localtime(self.modifiedTime))
+        return time.strftime(format, time.localtime(self.modified))
 
     class Iter:
         def __init__(self, obj):
