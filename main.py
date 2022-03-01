@@ -26,7 +26,7 @@ def main():
         if arg_dry_run:
             return
 
-        run_subprocess(command, cwd, check_return_code=check)
+        run_subprocess(command, cwd, config_encoding, check_return_code=check)
 
     # 解析参数
     parser = argparse.ArgumentParser(description='file comparer')
@@ -71,7 +71,7 @@ def main():
     config_upload_file = config_command.get('upload-file', '')
     config_upload_dir = config_command.get('upload-dir', '')
 
-    cache_file = File(replace_variables(config_cache_file, var={"source": arg_source, "workdir": workdir}))
+    cache_file = File(replace_variables(config_cache_file, var={"source": arg_source, "workdir": workdir, **config_variables}))
 
     # 获取缓存
     if not config_use_local_cache:

@@ -1,19 +1,20 @@
-cache-file: .cache.json
+cache-file: $cache
 overlay-mode: true
 fast-comparison: true
-use-local-cache: false
-threads: 1
+use-local-cache: true
+threads: 4
 file-filter: 
 
 variables:
+  cache: .cache1.json
   cos-cli: coscli-windows.exe
   bucket: 'cos://sdfs-1254063044'
 
 commands:
   _workdir: 
   _encoding: utf-8
-  download-cache: $cos-cli cp $bucket/.cache.json .cache.json
-  upload-cache: $cos-cli cp "$apath" $bucket/.cache.json
+  download-cache: $cos-cli cp $bucket/$cache $cache
+  upload-cache: $cos-cli cp "$apath" $bucket/$cache
   delete-file: $cos-cli rm "$bucket/$rpath" --force
   delete-dir: 
   upload-file: $cos-cli cp "$apath" "$bucket/$rpath --thread-num 1 --rate-limiting 0.1"

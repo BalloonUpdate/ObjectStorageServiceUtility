@@ -18,7 +18,7 @@ def replace_variables(text: str, var: dict = {}):
             break
     return text
 
-def run_subprocess(command: str, cwd: str, check_return_code: bool) -> str:
+def run_subprocess(command: str, cwd: str, encoding: str, check_return_code: bool) -> str:
     outputs = ''
 
     with subprocess.Popen(args=command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd) as process:
