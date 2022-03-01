@@ -4,80 +4,48 @@ import re
 import json
 import argparse
 import subprocess
+import yaml
 from file import File
 from file_comparer import FileComparer2, SimpleFileObject
-from meta import commit, compile_time, version, indev
-
-def replace_variables(text: str, var: dict = {}):
-    for i in range(0, 1000):
-        replaced = False
-        for k in var.keys():
-            new = text.replace(f'${k}', var[k])
-            if new != text:
-                replaced = True
-            text = new
-        if not replaced:
-            break
-    return text
+from functions import calculate_dir_structure, filter_and_progressify, filter_not_none, print_metadata, replace_variables, run_subprocess
+from meta import indev
 
 def execute(command: str, var: dict = {}, check: bool = True):
     if command == '':
         return
     vars = { **var, **config_variables }
     command = replace_variables(command, vars)
-    cwd = replace_variables(config_command_workdir, vars) if config_command_workdir != '' else None
+    cwd = replace_variables(config_workdir, vars) if config_workdir != '' else None
     if arg_debug:
         print('> ' + command)
-    if config_test_mode:
+    
+    if arg_dry_run:
         return
-    subprocess.run(command, check=check, shell=True, cwd=cwd, capture_output=not arg_detail)
 
-def dir_hash(dir: File):
-    structure = []
-    for f in dir:
-        if f.isFile:
-            structure.append({
-                'name': f.name,
-                'length': f.length,
-                'hash': f.sha1,
-                'modified': f.modified
-            })
-        if f.isDirectory:
-            structure.append({
-                'name': f.name,
-                'tree': dir_hash(f)
-            })
-    return structure
+    try:
+        run_subprocess(command, cwd, check_return_code=check)
+    except subprocess.CalledProcessError as e:
+        print(f'\n命令执行失败。子进程返回码为: {e.returncode}\n原始命令行: {e.cmd}\n子进程输出: {e.output}')
+        exit(e.returncode)
 
-def filter_and_progressify(ls: list) -> tuple: 
-    new_ls = [e for e in filter(lambda e: config_pattern == '' or re.fullmatch(config_pattern, e), ls)]
-    total = len(new_ls)
-    result = []
-    index = 0
-    for el in new_ls:
-        result += [(index, total, el)]
-        index += 1
-    return result
-
-# 开始运行（输出元数据）
+# 开始运行
 if not indev:
-    commit_sha = commit[:8] if len(commit) > 16 else commit
-    print('应用版本: ' + version + (f' ({commit_sha})' if len(commit) > 0 else ''))
-    print('编译时间: ' + compile_time)
-    print()
+    print_metadata()
 
+# 解析参数
 parser = argparse.ArgumentParser(description='file comparer')
-parser.add_argument('--config', type=str, default='config.json', help='specify a other config.json')
-parser.add_argument('--source', type=str, required=True, help='specify source directory to upload')
-parser.add_argument('--detail', action='store_true', help='show the detail of command execution')
-parser.add_argument('--debug', action='store_true', help='show command text before execute')
-args = parser.parse_args()
+parser.add_argument('source-dir', type=str, help='specify source directory to upload')
+parser.add_argument('--config', type=str, default='config.yml', help='specify a other config file')
+parser.add_argument('--debug', action='store_true', help='show command line before executing')
+parser.add_argument('--dry-run', action='store_true', help='run but do not execute any commands actually')
+args = vars(parser.parse_args())
 
-arg_config = args.config
-arg_source = args.source[:-1] if args.source.endswith('/') else args.source
-arg_detail = args.detail
-arg_debug = args.debug
+arg_config = args['config']
+arg_source = args['source-dir'][:-1] if args['source-dir'].endswith('/') else args['source-dir']
+arg_debug = args['debug']
+arg_dry_run = args['dry_run']
 
+# 检查参数
 workdir = os.getcwd()
 source_dir = File(arg_source)
 config_file = File(arg_config)
@@ -88,38 +56,40 @@ if config_file == '' or not config_file.exists or not config_file.isFile:
 if arg_source == '' or not source_dir.exists or not source_dir.isDirectory:
     raise Exception(f'源路径 {arg_source} 找不到或者不是一个目录')
 
-config = json.loads(config_file.content)
-config_cache_file = config['cache-file']
-config_overlay_mode = config['overlay-mode']
-config_command_workdir = config['command-workdir']
-config_pattern = config['pattern']
-config_test_mode = config['test-mode']
-config_check_modified = config['check-modified-time']
-config_variables = config['variables']
-config_download_cache = config['command']['download-cache']
-config_upload_cache = config['command']['upload-cache']
-config_delete_file = config['command']['delete-file']
-config_delete_dir = config['command']['delete-dir']
-config_upload_file = config['command']['upload-file']
-config_upload_dir = config['command']['upload-dir']
+# 读取配置文件
+config = filter_not_none(yaml.safe_load(config_file.content))
+config_cache_file = config.get('cache-file', '.cache.json')
+config_overlay_mode = config.get('overlay-mode', False)
+config_fast_comparison = config.get('fast-comparison', False)
+config_use_local_cache = config.get('use-local-cache', False)
+config_file_filter = config.get('file-filter', '')
+config_variables = filter_not_none(config.get('variables', {}))
+config_command = filter_not_none(config.get('commands', {}))
+config_workdir = config_command.get('_workdir', '')
+config_encoding = config_command.get('_encoding', 'utf-8')
+config_download_cache = config_command.get('download-cache', '')
+config_upload_cache = config_command.get('upload-cache', '')
+config_delete_file = config_command.get('delete-file', '')
+config_delete_dir = config_command.get('delete-dir', '')
+config_upload_file = config_command.get('upload-file', '')
+config_upload_dir = config_command.get('upload-dir', '')
 
 cache_file = File(replace_variables(config_cache_file, var={"source": arg_source, "workdir": workdir}))
 
-if config_cache_file == '':
-    raise Exception(f'配置文件中的 cache-file 不能为空')
-
 # 获取缓存
-print('获取缓存')
-execute(config_download_cache, var={"source": arg_source, "workdir": workdir}, check=False)
+if not config_use_local_cache:
+    print('获取缓存')
+    execute(config_download_cache, var={"source": arg_source, "workdir": workdir})
+else:
+    print('加载本地缓存')
 
 # 加载缓存
 cache = json.loads(cache_file.content) if cache_file.exists and cache_file.isFile else []
-cache_file.delete()
 
 # 计算文件差异
-print('计算文件差异')
+print('计算文件差异（可能需要一些时间）')
 def cmpfunc(remote: SimpleFileObject, local: File, path: str):
-    return (config_check_modified and remote.modified == local.modified) or remote.sha1 == local.sha1
+    return (config_fast_comparison and remote.modified == local.modified) or remote.sha1 == local.sha1
 
 cper = FileComparer2(source_dir, cmpfunc)
 cper.compareWithList(source_dir, cache)
@@ -128,19 +98,19 @@ cper.compareWithList(source_dir, cache)
 print(f'旧文件: {len(cper.oldFiles)}, 旧目录: {len(cper.oldFolders)}, 新文件: {len(cper.newFiles)}, 新目录: {len(cper.newFolders)}')
 
 filter_fun = lambda e: not config_overlay_mode or e not in cper.newFiles
-for (index, total, f) in filter_and_progressify([e for e in filter(filter_fun, cper.oldFiles)]):
+for (index, total, f) in filter_and_progressify(config_file_filter, [e for e in filter(filter_fun, cper.oldFiles)]):
     print(f'删除文件 {index + 1}/{total} - {f}')
     execute(config_delete_file, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
 
-for (index, total, f) in filter_and_progressify(cper.oldFolders):
+for (index, total, f) in filter_and_progressify(config_file_filter, cper.oldFolders):
     print(f'删除目录 {index + 1}/{total} - {f}')
     execute(config_delete_dir, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
 
-for (index, total, f) in filter_and_progressify(cper.newFolders):
+for (index, total, f) in filter_and_progressify(config_file_filter, cper.newFolders):
     print(f'建立目录 {index + 1}/{total} - {f}')
     execute(config_upload_dir, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
 
-for (index, total, f) in filter_and_progressify(cper.newFiles):
+for (index, total, f) in filter_and_progressify(config_file_filter, cper.newFiles):
     print(f'上传文件 {index + 1}/{total} - {f}')
     execute(config_upload_file, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
 
@@ -148,10 +118,11 @@ for (index, total, f) in filter_and_progressify(cper.newFiles):
 if sum([len(cper.oldFolders), len(cper.oldFiles), len(cper.newFolders), len(cper.newFiles)]) > 0:
     print('更新缓存')
     cache_file.delete()
-    cache_file.content = json.dumps(dir_hash(source_dir), ensure_ascii=False, indent=4)
+    cache_file.content = json.dumps(calculate_dir_structure(source_dir), ensure_ascii=False, indent=2)
     execute(config_upload_cache, var={"apath": config_cache_file, "source": arg_source, "workdir": workdir})
-    cache_file.delete()
     print('缓存已更新')
+    if not config_use_local_cache:
+        cache_file.delete()
 else:
     print('缓存无需更新')
 

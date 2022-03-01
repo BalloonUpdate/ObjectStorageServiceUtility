@@ -13,10 +13,10 @@
 
 ```
 cache-file: source, workdir
-command-workdir: 所有对应指令自身可用的变量
-command.download-cache: source, workdir
-command.upload-cache: apath, source, workdir
-command.delete-file: apath, rpath, source, workdir
-command.delete-dir: apath, rpath, source, workdir
-command.upload-file: apath, rpath, source, workdir
-command.upload-dir: apath, rpath, source, workdir
+commands._workdir: [apath], [rpath], source, workdir
+commands.download-cache: source, workdir
+commands.upload-cache: apath, source, workdir
+commands.delete-file: apath, rpath, source, workdir
+commands.delete-dir: apath, rpath, source, workdir
+commands.upload-file: apath, rpath, source, workdir
+commands.upload-dir: apath, rpath, source, workdir
