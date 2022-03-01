@@ -26,7 +26,7 @@ def execute(command: str, var: dict = {}, check: bool = True):
         run_subprocess(command, cwd, check_return_code=check)
     except subprocess.CalledProcessError as e:
         print(f'\n命令执行失败。子进程返回码为: {e.returncode}\n原始命令行: {e.cmd}\n子进程输出: {e.output}')
-        exit(e.returncode)
+        sys.exit(e.returncode)
 
 # 开始运行
 if not indev:
