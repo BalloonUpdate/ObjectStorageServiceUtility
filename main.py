@@ -2,9 +2,12 @@ import os
 import sys
 import re
 import json
+import time
 import argparse
 import subprocess
 import yaml
+from multiprocessing.pool import ThreadPool
+from queue import Queue
 from file import File
 from file_comparer import FileComparer2, SimpleFileObject
 from functions import calculate_dir_structure, filter_and_progressify, filter_not_none, print_metadata, replace_variables, run_subprocess
@@ -62,6 +65,7 @@ config_cache_file = config.get('cache-file', '.cache.json')
 config_overlay_mode = config.get('overlay-mode', False)
 config_fast_comparison = config.get('fast-comparison', False)
 config_use_local_cache = config.get('use-local-cache', False)
+config_threads = config.get('threads', 1)
 config_file_filter = config.get('file-filter', '')
 config_variables = filter_not_none(config.get('variables', {}))
 config_command = filter_not_none(config.get('commands', {}))
@@ -85,6 +89,7 @@ else:
 
 # 加载缓存
 cache = json.loads(cache_file.content) if cache_file.exists and cache_file.isFile else []
+cache = []
 
 # 计算文件差异
 print('计算文件差异（可能需要一些时间）')
@@ -110,9 +115,49 @@ for (index, total, f) in filter_and_progressify(config_file_filter, cper.newFold
     print(f'建立目录 {index + 1}/{total} - {f}')
     execute(config_upload_dir, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
 
+# 准备任务
+task_pool = Queue(1000000000)
+thread_pool = ThreadPool(config_threads)
+
 for (index, total, f) in filter_and_progressify(config_file_filter, cper.newFiles):
-    print(f'上传文件 {index + 1}/{total} - {f}')
-    execute(config_upload_file, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
+    task_pool.put([
+        total,
+        f,
+        config_upload_file, 
+        {"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir}
+    ])
+    # execute(config_upload_file, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
+
+finishes = 0
+def worker():
+    global finishes
+    while not task_pool.empty():
+        task = task_pool.get(timeout=1)
+        total, path, command_line, variables = task
+        execute(command_line, var=variables)
+        index = finishes
+        finishes += 1
+        print(f'上传文件 {index + 1}/{total} - {path}')
+
+# 提交任务
+start_time = time.time()
+ex = None
+for i in range(0, config_threads):
+    def onError(e):
+        thread_pool.terminate()
+        global ex
+        ex = e
+    thread_pool.apply_async(worker, error_callback=onError)
+
+thread_pool.close()
+thread_pool.join()
+
+if ex is not None:
+    raise ex
+
+if finishes > 0:
+    spent = '{:.2f}'.format(time.time() - start_time)
+    print(f'上传过程耗时 {spent}s')
 
 # 更新缓存
 if sum([len(cper.oldFolders), len(cper.oldFiles), len(cper.newFolders), len(cper.newFiles)]) > 0:

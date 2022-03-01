@@ -2,6 +2,7 @@ cache-file: .cache.json
 overlay-mode: true
 fast-comparison: true
 use-local-cache: false
+threads: 1
 file-filter: 
 
 variables:
@@ -15,5 +16,5 @@ commands:
   upload-cache: $cos-cli cp "$apath" $bucket/.cache.json
   delete-file: $cos-cli rm "$bucket/$rpath" --force
   delete-dir: 
-  upload-file: $cos-cli cp "$apath" "$bucket/$rpath"
+  upload-file: $cos-cli cp "$apath" "$bucket/$rpath --thread-num 1 --rate-limiting 0.1"
   upload-dir: 
