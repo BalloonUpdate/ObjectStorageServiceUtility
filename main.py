@@ -82,7 +82,9 @@ def main():
 
     # 加载缓存
     cache = json.loads(cache_file.content) if cache_file.exists and cache_file.isFile else []
-    cache = []
+    
+    # if indev:
+    #     cache = []
 
     # 计算文件差异
     print('计算文件差异（可能需要一些时间）')
