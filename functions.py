@@ -1,6 +1,7 @@
 
 import re
 import subprocess
+from typing import List, Tuple
 
 from file import File
 from meta import commit, compile_time, version
@@ -57,12 +58,14 @@ def calculate_dir_structure(dir: File):
             })
     return structure
 
-def filter_and_progressify(pattern: str, ls: list) -> tuple: 
-    new_ls = [e for e in filter(lambda e: pattern == '' or re.fullmatch(pattern, e), ls)]
-    total = len(new_ls)
+def filter_files(pattern: str, ls: List[str]) -> Tuple[str]: 
+    return [e for e in filter(lambda e: pattern == '' or re.fullmatch(pattern, e), ls)]
+
+def with_progress(list: List[str]) -> Tuple[int, int, str]: 
+    total = len(list)
     result = []
     index = 0
-    for el in new_ls:
+    for el in list:
         result += [(index, total, el)]
         index += 1
     return result

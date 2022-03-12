@@ -1,17 +1,15 @@
 import os
 import sys
-import re
 import json
 import time
 import argparse
 import subprocess
 import yaml
-from multiprocessing.pool import ThreadPool
-from queue import Queue
 from file import File
 from file_comparer import FileComparer2, SimpleFileObject
-from functions import calculate_dir_structure, filter_and_progressify, filter_not_none, print_metadata, replace_variables, run_subprocess
+from functions import calculate_dir_structure, filter_not_none, filter_files, print_metadata, replace_variables, run_subprocess, with_progress
 from meta import indev
+from parallelly_execute import parallelly_execute
 
 def main():
     def execute(command: str, var: dict = {}, check: bool = True):
@@ -97,60 +95,40 @@ def main():
     # 输出差异结果
     print(f'旧文件: {len(cper.oldFiles)}, 旧目录: {len(cper.oldFolders)}, 新文件: {len(cper.newFiles)}, 新目录: {len(cper.newFolders)}')
 
+    # 删除文件
     filter_fun = lambda e: not config_overlay_mode or e not in cper.newFiles
-    for (index, total, f) in filter_and_progressify(config_file_filter, [e for e in filter(filter_fun, cper.oldFiles)]):
-        print(f'删除文件 {index + 1}/{total} - {f}')
-        execute(config_delete_file, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
+    def worker1(index, total, res):
+        path = res
+        variables = {"apath": (source_dir + path).path, "rpath": path, "source": arg_source, "workdir": workdir}
+        print(f'删除文件 {index + 1}/{total} - {path}')
+        execute(config_delete_file, var=variables)
+    parallelly_execute(filter_files(config_file_filter, [e for e in filter(filter_fun, cper.oldFiles)]), config_threads, worker1)
 
-    for (index, total, f) in filter_and_progressify(config_file_filter, cper.oldFolders):
-        print(f'删除目录 {index + 1}/{total} - {f}')
-        execute(config_delete_dir, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
+    # 删除目录
+    def worker2(index, total, res):
+        path = res
+        variables = {"apath": (source_dir + path).path, "rpath": path, "source": arg_source, "workdir": workdir}
+        print(f'删除目录 {index + 1}/{total} - {path}')
+        execute(config_delete_dir, var=variables)
+    parallelly_execute(filter_files(config_file_filter, cper.oldFolders), config_threads, worker2)
 
-    for (index, total, f) in filter_and_progressify(config_file_filter, cper.newFolders):
-        print(f'建立目录 {index + 1}/{total} - {f}')
-        execute(config_upload_dir, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
-
-    # 准备任务
-    task_pool = Queue(1000000000)
-    thread_pool = ThreadPool(config_threads)
-
-    for (index, total, f) in filter_and_progressify(config_file_filter, cper.newFiles):
-        task_pool.put([
-            total,
-            f,
-            config_upload_file, 
-            {"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir}
-        ])
-        # execute(config_upload_file, var={"apath": (source_dir + f).path, "rpath": f, "source": arg_source, "workdir": workdir})
-
-    finishes = 0
-    def worker():
-        nonlocal finishes
-        while not task_pool.empty():
-            task = task_pool.get(timeout=1)
-            total, path, command_line, variables = task
-            index = finishes
-            finishes += 1
-            print(f'上传文件 {index + 1}/{total} - {path}')
-            execute(command_line, var=variables)
-
-    # 提交任务
+    # 创建目录
     start_time = time.time()
-    ex = None
-    def onError(e):
-        thread_pool.terminate()
-        nonlocal ex
-        ex = e
-    for i in range(0, config_threads):
-        thread_pool.apply_async(worker, error_callback=onError)
+    def worker3(index, total, res):
+        path = res
+        variables = {"apath": (source_dir + path).path, "rpath": path, "source": arg_source, "workdir": workdir}
+        print(f'建立目录 {index + 1}/{total} - {path}')
+        execute(config_upload_dir, var=variables)
+    parallelly_execute(filter_files(config_file_filter, cper.newFolders), config_threads, worker3)
 
-    thread_pool.close()
-    thread_pool.join()
-
-    if ex is not None:
-        raise ex
-
-    if finishes > 0:
+    # 上传文件
+    def worker4(index, total, res):
+        path = res
+        variables = {"apath": (source_dir + path).path, "rpath": path, "source": arg_source, "workdir": workdir}
+        print(f'上传文件 {index + 1}/{total} - {path}')
+        execute(config_upload_file, var=variables)
+    result = parallelly_execute(filter_files(config_file_filter, cper.newFiles), config_threads, worker4)
+    if result > 0:
         spent = '{:.2f}'.format(time.time() - start_time)
         print(f'上传过程耗时 {spent}s')
 
