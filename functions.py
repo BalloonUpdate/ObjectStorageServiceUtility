@@ -27,7 +27,7 @@ def run_subprocess(command: str, cwd: str, encoding: str, check_return_code: boo
                 data = stdout.read()
                 if len(data) == 0:
                     break
-                outputs += data.decode()
+                outputs += data.decode(encoding)
         
         retcode = process.poll()
 
