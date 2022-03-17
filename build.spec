@@ -3,7 +3,7 @@
 def get_git_tag(default):
     import os
     import re
-    ref = os.getenv('GITHUB_REF', '')
+    ref = os.getenv('GITHUB_REF', os.getenv('DRONE_COMMIT_REF', ''))
     match = re.search(r'(?<=refs/tags/).*', ref)
     if match is not None:
         tag_name = match[0][1:] if match[0].startswith('v') else match[0]
@@ -13,7 +13,7 @@ def get_git_tag(default):
 
 def get_git_sha():
     import os
-    return os.getenv('GITHUB_SHA', '')
+    return os.getenv('GITHUB_SHA', os.getenv('DRONE_COMMIT_SHA', ''))
 
 # 生成版本号文件
 import os

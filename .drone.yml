@@ -1,0 +1,76 @@
+kind: pipeline
+type: docker
+name: default
+
+platform:
+  os: linux
+  arch: amd64
+
+trigger:
+  ref:
+    - refs/tags/*
+
+steps:
+  - name: Restore cache
+    image: meltwater/drone-cache
+    volumes:
+      - name: cache
+        path: /tmp/cache
+    settings:
+      restore: true
+      backend: filesystem
+      cache_key: '{{ os }}-{{ arch }}'
+      archive-format: gzip
+      mount:
+        - venv
+
+  - name: Setup pip virtual environment
+    image: python:3.7
+    commands:
+      - CMD1="python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple"
+      - CMD2="python -m pip install virtualenv"
+      - CMD3="python -m virtualenv venv"
+      - ls venv > /dev/zero || ($CMD1 && $CMD2 && $CMD3)
+      - . venv/bin/activate
+      - pip config set --site global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+  - name: Setup pip dependents
+    image: python:3.7
+    commands:
+      - . venv/bin/activate
+      - pip install -r requirements.txt
+
+  - name: Build
+    image: python:3.7
+    commands:
+      - . venv/bin/activate
+      - pyinstaller build.spec
+  
+  - name: Upload release
+    image: plugins/gitea-release
+    settings:
+      base_url: https://ps.aprilforest.cn:2030
+      api_key: 
+        from_secret: gitea_token
+      files: dist/*
+      # checksum: [ md5, sha1, crc32 ]
+    when:
+      event: tag
+      
+  - name: Save cache
+    image: meltwater/drone-cache
+    volumes:
+      - name: cache
+        path: /tmp/cache
+    settings:
+      rebuild: true
+      backend: filesystem
+      cache_key: '{{ os }}-{{ arch }}'
+      archive-format: gzip
+      mount:
+        - venv
+
+volumes:
+  - name: cache
+    host: 
+      path: /tmp/drone-ci-cache/${DRONE_REPO}
