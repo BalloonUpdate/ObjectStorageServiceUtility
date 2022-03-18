@@ -1,4 +1,4 @@
-# ObjectStorageHelper
+# ObjectStorageServiceUtility
 
 对象存储同步助手
 
@@ -21,3 +21,4 @@ commands.delete-file: apath, rpath, source, workdir, variables
 commands.delete-dir: apath, rpath, source, workdir, variables
 commands.upload-file: apath, rpath, source, workdir, variables
 commands.upload-dir: apath, rpath, source, workdir, variables
+```
