@@ -52,37 +52,37 @@ def main():
 
     # 读取配置文件
     config = filter_not_none(yaml.safe_load(config_file.content))
-    config_cache_file = config.get('cache-file', '.cache.json')
+    config_state_file = config.get('state-file', '.state.json')
     config_overlay_mode = config.get('overlay-mode', False)
     config_fast_comparison = config.get('fast-comparison', False)
-    config_use_local_cache = config.get('use-local-cache', False)
+    config_use_local_state = config.get('use-local-state', False)
     config_threads = config.get('threads', 1)
     config_file_filter = config.get('file-filter', '')
     config_variables = filter_not_none(config.get('variables', {}))
     config_command = filter_not_none(config.get('commands', {}))
     config_workdir = config_command.get('_workdir', '')
     config_encoding = config_command.get('_encoding', 'utf-8')
-    config_download_cache = config_command.get('download-cache', '')
-    config_upload_cache = config_command.get('upload-cache', '')
+    config_download_state = config_command.get('download-state', '')
+    config_upload_state = config_command.get('upload-state', '')
     config_delete_file = config_command.get('delete-file', '')
     config_delete_dir = config_command.get('delete-dir', '')
     config_upload_file = config_command.get('upload-file', '')
-    config_upload_dir = config_command.get('upload-dir', '')
+    config_upload_dir = config_command.get('make-dir', '')
 
-    cache_file = File(replace_variables(config_cache_file, var={"source": arg_source, "workdir": workdir, **config_variables}))
+    state_file = File(replace_variables(config_state_file, var={"source": arg_source, "workdir": workdir, **config_variables}))
 
     # 获取缓存
-    if not config_use_local_cache:
+    if not config_use_local_state:
         print('获取缓存')
-        execute(config_download_cache, var={"source": arg_source, "workdir": workdir})
+        execute(config_download_state, var={"source": arg_source, "workdir": workdir})
     else:
         print('加载本地缓存')
 
     # 加载缓存
-    cache = json.loads(cache_file.content) if cache_file.exists and cache_file.isFile else []
+    state = json.loads(state_file.content) if state_file.exists and state_file.isFile else []
     
     # if indev:
-    #     cache = []
+    #     state = []
 
     # 计算文件差异
     print('计算文件差异（可能需要一些时间）')
@@ -90,7 +90,7 @@ def main():
         return (config_fast_comparison and remote.modified == local.modified) or remote.sha1 == local.sha1
 
     cper = FileComparer2(source_dir, cmpfunc)
-    cper.compareWithList(source_dir, cache)
+    cper.compareWithList(source_dir, state)
 
     # 输出差异结果
     print(f'旧文件: {len(cper.oldFiles)}, 旧目录: {len(cper.oldFolders)}, 新文件: {len(cper.newFiles)}, 新目录: {len(cper.newFolders)}')
@@ -135,12 +135,12 @@ def main():
     # 更新缓存
     if sum([len(cper.oldFolders), len(cper.oldFiles), len(cper.newFolders), len(cper.newFiles)]) > 0:
         print('更新缓存')
-        cache_file.delete()
-        cache_file.content = json.dumps(calculate_dir_structure(source_dir), ensure_ascii=False, indent=2)
-        execute(config_upload_cache, var={"apath": config_cache_file, "source": arg_source, "workdir": workdir})
+        state_file.delete()
+        state_file.content = json.dumps(calculate_dir_structure(source_dir), ensure_ascii=False, indent=2)
+        execute(config_upload_state, var={"apath": config_state_file, "source": arg_source, "workdir": workdir})
         print('缓存已更新')
-        if not config_use_local_cache:
-            cache_file.delete()
+        if not config_use_local_state:
+            state_file.delete()
     else:
         print('缓存无需更新')
 
