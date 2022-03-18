@@ -1,0 +1,21 @@
+state-file: $state
+overlay-mode: true
+fast-comparison: true
+use-local-state: true
+threads: 4
+file-filter: 
+
+variables:
+  state: .state.json
+  cli: coscli-windows.exe
+  bucket: 'cos://sdfs-1254063044'
+
+commands:
+  _workdir: 
+  _encoding: utf-8
+  download-state: $cli cp $bucket/$state $state
+  upload-state: $cli cp "$apath" $bucket/$state
+  delete-file: $cli rm "$bucket/$rpath" --force
+  delete-dir: 
+  upload-file: $cli sync "$apath" "$bucket/$rpath"
+  make-dir: 
