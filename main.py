@@ -71,14 +71,14 @@ def main():
 
     state_file = File(replace_variables(config_state_file, var={"source": arg_source, "workdir": workdir, **config_variables}))
 
-    # 获取缓存
+    # 获取状态文件
     if not config_use_local_state:
-        print('获取缓存')
+        print('获取状态文件')
         execute(config_download_state, var={"source": arg_source, "workdir": workdir})
     else:
-        print('加载本地缓存')
+        print('加载本地状态文件')
 
-    # 加载缓存
+    # 加载状态文件
     state = json.loads(state_file.content) if state_file.exists and state_file.isFile else []
     
     # if indev:
@@ -132,19 +132,18 @@ def main():
         spent = '{:.2f}'.format(time.time() - start_time)
         print(f'上传过程耗时 {spent}s')
 
-    # 更新缓存
+    # 更新状态文件
     if sum([len(cper.oldFolders), len(cper.oldFiles), len(cper.newFolders), len(cper.newFiles)]) > 0:
-        print('更新缓存')
+        print('更新状态文件')
         state_file.delete()
         state_file.content = json.dumps(calculate_dir_structure(source_dir), ensure_ascii=False, indent=2)
         execute(config_upload_state, var={"apath": config_state_file, "source": arg_source, "workdir": workdir})
-        print('缓存已更新')
-        if not config_use_local_state:
-            state_file.delete()
+        print('状态文件已更新')
     else:
-        print('缓存无需更新')
+        print('状态文件无需更新')
 
-    print('Done')
+    if not config_use_local_state:
+        state_file.delete()
 
 if __name__ == "__main__":
     if not indev:
