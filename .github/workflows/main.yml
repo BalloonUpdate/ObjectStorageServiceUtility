@@ -1,0 +1,73 @@
+name: Release Build
+
+on:
+  push:
+    tags: 
+      - "v*"
+
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'a version name'
+        required: false
+        default: '0.0.0'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: windows-2019
+            venv-init: venv\Scripts\activate
+          - os: ubuntu-18.04
+            venv-init: . venv/bin/activate
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      
+      - name: load-cache
+        uses: actions/cache@v2
+        with:
+          path: ./venv
+          key: ${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
+
+      - name: build
+        env:
+          PROJECT_VERSION: ${{ github.event.inputs.version_name }}
+        run: |
+          python3 -m pip install wheel setuptools virtualenv
+          python3 -m virtualenv venv
+          ${{ matrix.venv-init }}
+          pip install -r requirements.txt
+          pyinstaller build.spec
+
+      - name: print-hashes
+        shell: "python3 {0}"
+        run: |
+          import os
+          import hashlib
+          directory = 'dist'
+          def hash(fileToBeHashed, hashobj):
+              with open(fileToBeHashed, 'rb') as f:
+                  hashobj.update(f.read())
+                  return hashobj.hexdigest()
+          def show_hash(f, hashobj, indent='    '):
+              print(hashobj.name + ': ' + hash(f, hashobj) + '\n')
+          for f in os.listdir(directory):
+              sf = os.path.join(directory, f)
+              if os.path.isfile(sf):
+                  print('Hashes for ' + sf)
+                  show_hash(sf, hashlib.md5())
+                  show_hash(sf, hashlib.sha1())
+                  show_hash(sf, hashlib.sha256())
+
+      - name: upload-release
+        uses: xresloader/upload-to-github-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.ORG_TOKEN }}
+        with:
+          file: dist/*;examples/*
+          draft: false
+          tags: true

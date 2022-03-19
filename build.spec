@@ -19,6 +19,7 @@ def get_git_sha():
 import os
 import json
 import time
+import sys
 
 metadata_file = 'meta.json'
 version_text = get_git_tag(os.getenv('PROJECT_VERSION', '0.0.0'))
@@ -58,7 +59,7 @@ exe = EXE(pyz,
           a.zipfiles,
           a.datas,  
           [],
-          name='ossu-'+version_text,
+          name=f'ossu-{sys.platform}-{version_text}',
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,
