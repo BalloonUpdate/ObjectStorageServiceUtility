@@ -155,3 +155,4 @@ cython_debug/
 /debug
 /.cache.json
 /config.yml
+/.state.json

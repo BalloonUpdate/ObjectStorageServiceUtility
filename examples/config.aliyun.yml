@@ -7,8 +7,8 @@ file-filter:
 
 variables:
   state: .state.json
-  cli: coscli-windows.exe
-  bucket: 'cos://sdfs-1254063044'
+  cli: ossutil64.exe
+  bucket: 'oss://sdfdsfewffwefwefwefwef'
 
 commands:
   _workdir: 
@@ -17,5 +17,5 @@ commands:
   upload-state: $cli cp "$apath" $bucket/$state --force
   delete-file: $cli rm "$bucket/$rpath" --force
   delete-dir: 
-  upload-file: $cli sync "$apath" "$bucket/$rpath" --force
+  upload-file: $cli cp "$apath" "$bucket/$rpath" --force
   make-dir: 
