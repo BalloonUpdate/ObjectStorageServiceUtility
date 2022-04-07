@@ -1,0 +1,21 @@
+state-file: $state
+overlay-mode: true
+fast-comparison: true
+use-local-state: true
+threads: 4
+file-filter: 
+
+variables:
+  state: .state.json
+  cli: qshell.exe
+  bucket: your-bucket-name
+
+commands:
+  _workdir: 
+  _encoding: utf-8
+  download-state: $cli get $bucket "$state" -o "$state"
+  upload-state: $cli rput $bucket "$state" "$apath" --overwrite
+  delete-file: $cli delete $bucket "$rpath"
+  delete-dir: 
+  upload-file: $cli rput $bucket "$rpath" "$apath" --overwrite
+  make-dir: 
